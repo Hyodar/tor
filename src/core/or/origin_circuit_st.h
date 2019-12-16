@@ -292,6 +292,17 @@ struct origin_circuit_t {
    */
   smartlist_t *prepend_policy;
 
+  // Franco
+  // ---------------------------------------------------------------------------
+  // Starting implementation of 2 way multipath
+
+  int is_boss;
+  int has_boss;
+
+  origin_circuit_t* boss_circ;
+  origin_circuit_t* bossed_circ;
+  // ---------------------------------------------------------------------------
+
   /** How long do we wait before closing this circuit if it remains
    * completely idle after it was built, in seconds? This value
    * is randomized on a per-circuit basis from CircuitsAvailableTimoeut

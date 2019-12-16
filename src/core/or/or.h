@@ -106,6 +106,15 @@ struct curve25519_public_key_t;
 #define cell_t tor_cell_t
 #endif
 
+// Franco
+// ---------------------------------------------------------------------------
+#define MAX_LINKED_CIRCUITS 10
+#define MAX_CIRCUIT_TABLE_SIZE 500
+#define SEQNUM_SIZE sizeof(uint32_t)
+#define WRR_SENDME_RTT 50
+#define MEASURE_WEIGHT_FREQ 3
+// ---------------------------------------------------------------------------
+
 /** Helper macro: Given a pointer to to.base_, of type from*, return &to. */
 #define DOWNCAST(to, ptr) ((to*)SUBTYPE_P(ptr, to, base_))
 
@@ -196,6 +205,12 @@ struct curve25519_public_key_t;
 #define RELAY_COMMAND_BEGIN_DIR 13
 #define RELAY_COMMAND_EXTEND2 14
 #define RELAY_COMMAND_EXTENDED2 15
+
+
+// Franco
+// ---------------------------------------------------------------------------
+#define RELAY_COMMAND_MULTIPATH 19
+// ---------------------------------------------------------------------------
 
 #define RELAY_COMMAND_ESTABLISH_INTRO 32
 #define RELAY_COMMAND_ESTABLISH_RENDEZVOUS 33

@@ -2229,6 +2229,7 @@ onion_pick_cpath_exit(origin_circuit_t *circ, extend_info_t *exit_ei,
     int r = new_route_len(circ->base_.purpose, exit_ei, nodelist_get_list());
     if (r < 1) /* must be at least 1 */
       return -1;
+    // Franco: colocar check de multipath
     state->desired_path_len = r;
   }
 

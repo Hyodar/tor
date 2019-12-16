@@ -1079,6 +1079,15 @@ origin_circuit_new(void)
               prediction_time_remaining);
   }
 
+  // Franco
+  // ----------------------------------------------------------------
+  circ->is_boss = 0;
+  circ->has_boss = 0;
+
+  circ->boss_circ = NULL;
+  circ->bossed_circ = NULL;
+  // ----------------------------------------------------------------
+
   return circ;
 }
 
