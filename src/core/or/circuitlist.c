@@ -1087,6 +1087,9 @@ origin_circuit_new(void)
   for(uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
     circ->bossed_circs[i] = NULL;
   }
+
+  circ->current_multipath = 0;
+  circ->multipath_or_boss = BOSS_TURN;
   // ----------------------------------------------------------------
 
   return circ;

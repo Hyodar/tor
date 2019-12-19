@@ -297,14 +297,23 @@ struct origin_circuit_t {
   // Starting implementation of 2 way multipath
 
   /* Multipath roles of a circuit */
-  #define MULTIPATH_NONE   0
-  #define MULTIPATH_BOSS   1
-  #define MULTIPATH_BOSSED 2
+#define MULTIPATH_NONE   0
+#define MULTIPATH_BOSS   1
+#define MULTIPATH_BOSSED 2
 
   int multipath_role;
 
   origin_circuit_t* boss_circ;
   origin_circuit_t* bossed_circs[MAX_LINKED_CIRCUITS];
+  
+  int current_multipath;
+
+#define MULTIPATH_TURN 0
+#define BOSS_TURN      1
+  bool multipath_or_boss;
+
+  // REVIEW
+  // colocar stats de throughput, talvez?
   // -------------------------------------------------------------------------
 
   /** How long do we wait before closing this circuit if it remains

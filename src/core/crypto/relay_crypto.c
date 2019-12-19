@@ -223,11 +223,39 @@ relay_encrypt_cell_outbound(cell_t *cell,
   crypt_path_t *thishop; /* counter for repeated crypts */
   cpath_set_cell_forward_digest(layer_hint, cell);
 
+  // Franco
+  // -------------------------------------------------------------------------
+
+  /* Experimentally, I put a 50/50 ratio between the boss circuit and the bossed,
+     whereas the bossed are 5 circuits in total
+  */
+
+  if(circ->multipath_or_boss == BOSS_TURN) {
+    circ->multipath_or_boss = !circ->multipath_or_boss;
+  }
+  else {
+    // POSSIBLE DANGER
+    /* here, i assume the multipaths will always be open and no
+       NULL hole is left in the array
+    */
+    origin_circuit_t* multipath_circuit = 
+      circ->bossed_circs[circ->current_multipath];
+    
+    circ->current_multipath = 
+      (++circ->current_multipath) % MAX_LINKED_CIRCUITS;
+
+    cell->circ_id = multipath_circuit->global_identifier;
+    circ = multipath_circuit;
+  }
+
+  // -------------------------------------------------------------------------
+
   /* Record cell digest as the SENDME digest if need be. */
   sendme_record_sending_cell_digest(TO_CIRCUIT(circ), layer_hint);
 
   thishop = layer_hint;
   /* moving from farthest to nearest hop */
+
   do {
     tor_assert(thishop);
     log_debug(LD_OR,"encrypting a layer of the relay cell.");
@@ -249,6 +277,11 @@ relay_encrypt_cell_inbound(cell_t *cell,
                            or_circuit_t *or_circ)
 {
   relay_set_digest(or_circ->crypto.b_digest, cell);
+
+  // Franco
+  // -------------------------------------------------------------------------
+  // TODO
+  // -------------------------------------------------------------------------
 
   /* Record cell digest as the SENDME digest if need be. */
   sendme_record_sending_cell_digest(TO_CIRCUIT(or_circ), NULL);
