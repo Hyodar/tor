@@ -494,12 +494,54 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
     return NULL;
   }
 
+  // Franco
+  circ->multipath_role = MULTIPATH_BOSS;
+
+  /* Here the bossed circuits are also created */
+  for(uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+    
+    // REVIEW
+    // POSSIBLE DANGER (essa funcao msm? esse purpose? essas flags?)
+    origin_circuit_t* bossed_circuit = 
+      origin_circuit_init(CIRCUIT_PURPOSE_C_GENERAL, 0); 
+
+    /* The exit node is the same */
+    bossed_circuit->build_state->chosen_exit = 
+      bossed_circuit->build_state->chosen_exit;
+    bossed_circuit->multipath_role = MULTIPATH_BOSSED;
+    
+    // REVIEW
+    // populate de menos bandwith pra bossed
+    if (onion_populate_cpath(bossed_circuit) < 0) {
+      circuit_mark_for_close(TO_CIRCUIT(bossed_circuit), END_CIRC_REASON_NOPATH);
+      break;
+    }
+
+    circ->bossed_circs[i] = bossed_circuit;
+  }
+
   circuit_event_status(circ, CIRC_EVENT_LAUNCHED, 0);
+
+  // Franco
+  for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+    if (circ->bossed_circs[i]) {
+      circuit_event_status(circ->bossed_circs[i], CIRC_EVENT_LAUNCHED, 0);
+    }
+  }
 
   if ((err_reason = circuit_handle_first_hop(circ)) < 0) {
     circuit_mark_for_close(TO_CIRCUIT(circ), -err_reason);
     return NULL;
   }
+
+  // Franco
+  for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+    if ((err_reason = circuit_handle_first_hop(circ->bossed_circs[i])) < 0) {
+      circuit_mark_for_close(TO_CIRCUIT(circ->bossed_circs[i]), -err_reason);
+      circ->bossed_circs[i] = NULL;
+    }
+  }
+
   return circ;
 }
 

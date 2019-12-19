@@ -1160,9 +1160,9 @@ circuit_free_(circuit_t *circ)
     // Franco
     // -----------------------------------------------------------------------
     
-    /* update: it was changed
-    If the boss circuit is deleted, the bossed are also deleted 
-      (This is something that could be changed)
+    /*
+    If the boss circuit is deleted, the bossed are also deleted
+    */
     
     if (ocirc->multipath_role == MULTIPATH_BOSS) {
       for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
@@ -1171,7 +1171,6 @@ circuit_free_(circuit_t *circ)
         }
       }
     }
-    */
 
     /* If a bossed circuit is deleted, it is also deleted from the
        boss' bossed list
