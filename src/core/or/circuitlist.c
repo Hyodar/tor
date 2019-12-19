@@ -1081,11 +1081,12 @@ origin_circuit_new(void)
 
   // Franco
   // ----------------------------------------------------------------
-  circ->is_boss = 0;
-  circ->has_boss = 0;
+  circ->multipath_role = MULTIPATH_NONE;
 
   circ->boss_circ = NULL;
-  circ->bossed_circ = NULL;
+  for(uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+    circ->bossed_circs[i] = NULL;
+  }
   // ----------------------------------------------------------------
 
   return circ;
@@ -1155,6 +1156,37 @@ circuit_free_(circuit_t *circ)
     tor_assert(circ->magic == ORIGIN_CIRCUIT_MAGIC);
 
     circuit_remove_from_origin_circuit_list(ocirc);
+
+    // Franco
+    // -----------------------------------------------------------------------
+    
+    /* update: it was changed
+    If the boss circuit is deleted, the bossed are also deleted 
+      (This is something that could be changed)
+    
+    if (ocirc->multipath_role == MULTIPATH_BOSS) {
+      for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+        if (ocirc->bossed_circs[i]) {
+          tor_free(ocirc->bossed_circs[i]);
+        }
+      }
+    }
+    */
+
+    /* If a bossed circuit is deleted, it is also deleted from the
+       boss' bossed list
+    */
+    if (ocirc->multipath_role == MULTIPATH_BOSSED) {
+      for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+        if (ocirc->boss_circ->bossed_circs[i] == ocirc) {
+          ocirc->boss_circ->bossed_circs[i] = NULL;
+          log_debug(LD_CIRC, "Bossed circuit has been removed from boss.");
+          break;
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
 
     if (ocirc->half_streams) {
       SMARTLIST_FOREACH_BEGIN(ocirc->half_streams, half_edge_t *,
@@ -1443,6 +1475,7 @@ circuit_get_by_global_id(uint32_t id)
     }
   }
   SMARTLIST_FOREACH_END(circ);
+
   return NULL;
 }
 
@@ -1458,6 +1491,10 @@ static inline circuit_t *
 circuit_get_by_circid_channel_impl(circid_t circ_id, channel_t *chan,
                                    int *found_entry_out)
 {
+
+  // POSSIBLE_DANGER
+  // should it return bossed ones? or maybe only the boss?
+
   chan_circid_circuit_map_t search;
   chan_circid_circuit_map_t *found;
 

@@ -293,15 +293,19 @@ struct origin_circuit_t {
   smartlist_t *prepend_policy;
 
   // Franco
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Starting implementation of 2 way multipath
 
-  int is_boss;
-  int has_boss;
+  /* Multipath roles of a circuit */
+  #define MULTIPATH_NONE   0
+  #define MULTIPATH_BOSS   1
+  #define MULTIPATH_BOSSED 2
+
+  int multipath_role;
 
   origin_circuit_t* boss_circ;
-  origin_circuit_t* bossed_circ;
-  // ---------------------------------------------------------------------------
+  origin_circuit_t* bossed_circs[MAX_LINKED_CIRCUITS];
+  // -------------------------------------------------------------------------
 
   /** How long do we wait before closing this circuit if it remains
    * completely idle after it was built, in seconds? This value

@@ -108,7 +108,7 @@ struct curve25519_public_key_t;
 
 // Franco
 // ---------------------------------------------------------------------------
-#define MAX_LINKED_CIRCUITS 10
+#define MAX_LINKED_CIRCUITS 5
 #define MAX_CIRCUIT_TABLE_SIZE 500
 #define SEQNUM_SIZE sizeof(uint32_t)
 #define WRR_SENDME_RTT 50
