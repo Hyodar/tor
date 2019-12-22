@@ -307,6 +307,7 @@ struct origin_circuit_t {
   origin_circuit_t* bossed_circs[MAX_LINKED_CIRCUITS];
   
   int current_multipath;
+  int n_multipaths;
 
 #define MULTIPATH_TURN 0
 #define BOSS_TURN      1

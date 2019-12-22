@@ -517,13 +517,14 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
       break;
     }
 
-    circ->bossed_circs[i] = bossed_circuit;
+    circ->bossed_circs[circ->n_multipaths] = bossed_circuit;
+    circ->n_multipaths++;
   }
 
   circuit_event_status(circ, CIRC_EVENT_LAUNCHED, 0);
 
   // Franco
-  for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+  for (uint8_t i = 0; i < circ->n_multipaths; i++) {
     if (circ->bossed_circs[i]) {
       circuit_event_status(circ->bossed_circs[i], CIRC_EVENT_LAUNCHED, 0);
     }

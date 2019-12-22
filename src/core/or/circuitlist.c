@@ -1089,6 +1089,7 @@ origin_circuit_new(void)
   }
 
   circ->current_multipath = 0;
+  circ->n_multipaths = 0;
   circ->multipath_or_boss = BOSS_TURN;
   // ----------------------------------------------------------------
 
@@ -1168,7 +1169,7 @@ circuit_free_(circuit_t *circ)
     */
     
     if (ocirc->multipath_role == MULTIPATH_BOSS) {
-      for (uint8_t i = 0; i < MAX_LINKED_CIRCUITS; i++) {
+      for (uint8_t i = 0; i < ocirc->n_multipaths; i++) {
         if (ocirc->bossed_circs[i]) {
           tor_free(ocirc->bossed_circs[i]);
         }

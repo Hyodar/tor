@@ -617,7 +617,49 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
 
   memset(&cell, 0, sizeof(cell_t));
   cell.command = CELL_RELAY;
+  // Franco
+  cell.sequence_num = circ->cell_sequence_num;
+  circ->cell_sequence_num = (circ->cell_sequence_num + 1) % UINT_FAST64_MAX;
+
   if (CIRCUIT_IS_ORIGIN(circ)) {
+    // Franco
+    // -------------------------------------------------------------------------
+
+    /* Experimentally, I put a 50/50 ratio between the boss circuit and the bossed,
+      whereas the bossed are 5 circuits in total
+       I plan to sort the circuits by their assigned weight and distribute the cells
+      accordingly.
+    */
+
+    origin_circuit_t* ocirc = TO_ORIGIN_CIRCUIT(circ);
+    
+    if(ocirc->multipath_or_boss == BOSS_TURN) {
+      log_info(LD_GENERAL, "Boss: %p | Sending traffic through boss route.\n", ocirc);
+      ocirc->multipath_or_boss = !ocirc->multipath_or_boss;
+    }
+    else {
+      // POSSIBLE DANGER
+      /* here, i assume the multipaths will always be open and no
+        NULL hole is left in the array
+      */
+      origin_circuit_t* multipath_circuit = 
+        ocirc->bossed_circs[ocirc->current_multipath];
+      
+      ocirc->current_multipath = 
+        (++ocirc->current_multipath) % ocirc->n_multipaths;
+      ocirc->multipath_or_boss = !ocirc->multipath_or_boss;
+
+      if(multipath_circuit) {
+        circ = TO_CIRCUIT(multipath_circuit);
+      
+        log_err(LD_GENERAL, "Boss: %p | Sending traffic through bossed route.\n", ocirc);
+      }
+      else {
+        log_err(LD_GENERAL, "Boss: %p | Tried to send traffic through invalid bossed route.\n", ocirc);
+      }
+    }
+    // -------------------------------------------------------------------------
+
     tor_assert(cpath_layer);
     cell.circ_id = circ->n_circ_id;
     cell_direction = CELL_DIRECTION_OUT;

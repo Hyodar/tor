@@ -18,6 +18,10 @@ struct cell_t {
   circid_t circ_id; /**< Circuit which received the cell. */
   uint8_t command; /**< Type of the cell: one of CELL_PADDING, CELL_CREATE,
                     * CELL_DESTROY, etc */
+  // Franco
+  // -------------------------------------------------------------------------
+  uint64_t sequence_num; /* Number of the cell in a sequence */
+  // -------------------------------------------------------------------------
   uint8_t payload[CELL_PAYLOAD_SIZE]; /**< Cell body. */
 };
 
