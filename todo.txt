@@ -1,5 +1,13 @@
+
+/*
 - Continuar implementacao dos sequence numbers
     \-> Pensar em como dar sort nos sequence numbers quando tem algum q ja ultrapassou UINT64_MAX
     \-> Ver onde colocar e inicializar esses valores de sequence number nos circuits e onde eles podem ser incrementados
         (por enquanto a ideia é que só os boss usem isso, e ele seja atribuido e incrementado quando o pacote fosse mandado)
     \-> Ver onde dar sort no inicio e no final do circuito
+*/
+
+Inicializar os atributos criados em edge_connection_t DONE
+
+ir no PAREI AQ
+circuit_receive_relay_cell no conflux

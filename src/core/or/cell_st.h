@@ -20,7 +20,7 @@ struct cell_t {
                     * CELL_DESTROY, etc */
   // Franco
   // -------------------------------------------------------------------------
-  uint64_t sequence_num; /* Number of the cell in a sequence */
+  uint32_t sequence_num; /* Number of the cell in a sequence */
   // -------------------------------------------------------------------------
   uint8_t payload[CELL_PAYLOAD_SIZE]; /**< Cell body. */
 };

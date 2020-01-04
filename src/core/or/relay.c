@@ -261,7 +261,27 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
       return 0;
     }
 
-    conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+    // Franco
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      if (TO_ORIGIN_CIRCUIT(circ)->multipath_role == MULTIPATH_BOSS) {
+        // if it is a boss circ, it just gets the connection
+        conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+      }
+      else {
+        // if it is a bossed circ, it gets the connection of the boss
+        circuit_t* boss = TO_ORIGIN_CIRCUIT(circ)->boss_circ;
+        conn = relay_lookup_conn(boss, cell, cell_direction, layer_hint);
+      }
+
+      // error if connection not found
+      if (!conn) return -1;
+
+      uint32_t seq = ntohl() // PAREI AQ
+    }
+    else { /* CIRCUIT_IS_ORIGIN(circ) */
+      conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+    }
+
     if (cell_direction == CELL_DIRECTION_OUT) {
       ++stats_n_relay_cells_delivered;
       log_debug(LD_OR,"Sending away from origin.");
@@ -340,7 +360,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
     return -END_CIRC_REASON_TORPROTOCOL;
   }
 
-  log_debug(LD_OR,"Passing on unrecognized cell.");
+  log_debug(LD_OR, "Passing on unrecognized cell.");
 
   ++stats_n_relay_cells_relayed; /* XXXX no longer quite accurate {cells}
                                   * we might kill the circ before we relay

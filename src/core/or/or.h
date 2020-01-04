@@ -592,7 +592,7 @@ typedef enum {
 // Franco
 // ---------------------------------------------------------------------------
 /** Number of bytes in a cell, minus cell header and sequence number. */
-#define CELL_PAYLOAD_SIZE 501
+#define CELL_PAYLOAD_SIZE 505
 // ---------------------------------------------------------------------------
 
 /** Number of bytes in a cell transmitted over the network, in the longest

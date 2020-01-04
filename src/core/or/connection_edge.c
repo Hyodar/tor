@@ -4020,6 +4020,10 @@ connection_exit_begin_conn(cell_t *cell, circuit_t *circ)
   n_stream->package_window = STREAMWINDOW_START;
   n_stream->deliver_window = STREAMWINDOW_START;
 
+  // Franco
+  n_stream->early_cells_list = smartlist_new();
+  n_stream->next_seq_num = 0;
+
   if (circ->purpose == CIRCUIT_PURPOSE_S_REND_JOINED) {
     int ret;
     tor_free(address);

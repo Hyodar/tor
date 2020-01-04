@@ -16,6 +16,9 @@
 
 #include "core/or/connection_st.h"
 
+// Franco
+struct smartlist_t;
+
 /** Subtype of connection_t for an "edge connection" -- that is, an entry (ap)
  * connection, or an exit. */
 struct edge_connection_t {
@@ -76,6 +79,20 @@ struct edge_connection_t {
    * that's going away and being used on channels instead.  We still tag
    * edge connections with dirreq_id from circuits, so it's copied here. */
   uint64_t dirreq_id;
+
+  // Franco
+  // -------------------------------------------------------------------------
+  /** 
+   * Buffer to hold cells that arrive earlier than expected from the multipaths.
+  */
+  struct smartlist_t* early_cells_list;
+
+  /**
+   * Next sequence number to be sent
+   */
+  uint32_t next_seq_num;
+  // -------------------------------------------------------------------------
+
 };
 
 #endif /* !defined(EDGE_CONNECTION_ST_H) */
