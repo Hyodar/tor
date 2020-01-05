@@ -95,6 +95,11 @@
 #include "core/or/socks_request_st.h"
 #include "core/or/sendme.h"
 
+#define SEQN_INCREMENT(seq1) (seq1 + 1) % UINT_FAST32_MAX
+#define SEQN_IS_NEXT(seq1, seq2) seq1 == SEQN_INCREMENT(seq2)
+#define SEQN_BIGGER(seq1, seq2) seq1 > seq2
+/* TODO mudar isso pra sequence number arithmetic */
+
 static edge_connection_t *relay_lookup_conn(circuit_t *circ, cell_t *cell,
                                             cell_direction_t cell_direction,
                                             crypt_path_t *layer_hint);
@@ -207,6 +212,73 @@ circuit_update_channel_usage(circuit_t *circ, cell_t *cell)
   }
 }
 
+// Franco
+int
+send_and_dump_early_cells(edge_connection_t* conn, crypt_path_t* layer_hint,
+                          circuit_t* circ) {
+
+  struct smartlist_t* early_cells = conn->early_cells_list;
+  
+  // Franco
+  if(!early_cells->num_used) return 0; // nothing to dump
+
+  struct early_cell_t* tail = smartlist_get(early_cells, early_cells->num_used - 1);
+
+  while(tail) {
+    if(SEQN_IS_NEXT(tail->sequence_num, conn->next_seq_num)) {
+      tail = smartlist_pop_last(early_cells);
+
+      int reason = 
+        connection_edge_process_relay_cell(tail->cell, circ, conn, layer_hint);
+      if (reason >= 0 ) {
+          tor_free(tail->cell);
+          tor_free(tail);
+          conn->next_seq_num++;
+          
+          if(!early_cells->num_used) return 0; // nothing to dump
+          tail = smartlist_get(early_cells, early_cells->num_used - 1);
+      } else {
+          return -1;
+      }
+    }
+    else {
+      break;
+    }
+  }
+}
+
+// Franco
+int
+insert_early_cell(edge_connection_t* conn, crypt_path_t* layer_hint,
+                 circuit_t* circ, cell_t* cell, uint32_t seqn) {
+  
+  struct early_cell_t* ecell = tor_malloc_zero(sizeof(struct early_cell_t));
+  ecell->cell = tor_malloc_zero(sizeof(cell_t));
+  memcpy(ecell->cell, cell, sizeof(cell_t));
+  ecell->sequence_num = seqn;
+
+  if(!conn->early_cells_list->num_used) {
+    // if the smartlist is empty
+    smartlist_add(conn->early_cells_list, ecell);
+    return 0;
+  }
+
+  size_t i;
+  for(i = conn->early_cells_list->num_used - 1; i >= 0; i--) {
+    struct early_cell_t* it = conn->early_cells_list->list[i];
+    if(SEQN_BIGGER(seqn, it->sequence_num)) {
+      smartlist_insert(conn->early_cells_list, i+1, ecell);
+      return 0;
+    }
+  }
+
+  if(!i) { /* if it was supposed to be the first el (bigger seqn) */
+    smartlist_insert(conn->early_cells_list, 0, ecell);
+    return 0;
+  }
+
+}
+
 /** Receive a relay cell:
  *  - Crypt it (encrypt if headed toward the origin or if we <b>are</b> the
  *    origin; decrypt if we're headed toward the exit).
@@ -245,7 +317,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
   circuit_update_channel_usage(circ, cell);
 
   if (recognized) {
-    edge_connection_t *conn = NULL;
+    edge_connection_t* conn = NULL;
 
     /* Recognized cell, the cell digest has been updated, we'll record it for
      * the SENDME if need be. */
@@ -262,25 +334,75 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
     }
 
     // Franco
-    if (CIRCUIT_IS_ORIGIN(circ)) {
-      if (TO_ORIGIN_CIRCUIT(circ)->multipath_role == MULTIPATH_BOSS) {
-        // if it is a boss circ, it just gets the connection
+    if (cell->payload[0] == RELAY_COMMAND_DATA && cell_direction == CELL_DIRECTION_IN) {
+      if (CIRCUIT_IS_ORIGIN(circ)) {
+        if (TO_ORIGIN_CIRCUIT(circ)->multipath_role == MULTIPATH_BOSS) {
+          // if it is a boss circ, it just gets the connection
+          conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+        }
+        else {
+          // if it is a bossed circ, it gets the connection of the boss
+          circuit_t* boss = TO_ORIGIN_CIRCUIT(circ)->boss_circ;
+          conn = relay_lookup_conn(boss, cell, cell_direction, layer_hint);
+        }
+
+        // error if connection not found
+        if (!conn) return -1;
+
+        uint32_t seqn = ntohl(get_uint32(cell->payload + RELAY_HEADER_SIZE)); 
+        
+        // Kevin <
+        if (( layer_hint && --layer_hint->deliver_window < 0) ||
+                (!layer_hint && --circ->deliver_window < 0)) {
+            log_info(LOG_PROTOCOL_WARN, LD_PROTOCOL,
+                      "(relay data) circ deliver_window below 0. Killing.");
+            connection_edge_end(conn, END_STREAM_REASON_TORPROTOCOL);
+            connection_mark_for_close(TO_CONN(conn));
+            return -END_CIRC_REASON_TORPROTOCOL;
+        }
+
+        log_info(LD_OR,"circ deliver_window now %d.", layer_hint ?
+                  layer_hint->deliver_window : circ->deliver_window);
+
+        if (--conn->deliver_window < 0) { /* is it below 0 after decrement? */
+            log_info(LOG_PROTOCOL_WARN, LD_PROTOCOL,
+                      "(relay data) conn deliver_window below 0. Killing.");
+            return -END_CIRC_REASON_TORPROTOCOL;
+        }
+        circuit_consider_sending_sendme(circ, layer_hint); // FIXME
+        connection_edge_consider_sending_sendme(conn); // FIXME
+        // >
+        
+        if (SEQN_IS_NEXT(seqn, conn->next_seq_num)) {
+          if ((reason = connection_edge_process_relay_cell(
+            cell, circ, conn, layer_hint))) {
+              return reason; // if error, returns
+            }
+
+          conn->next_seq_num = SEQN_INCREMENT(conn->next_seq_num);
+
+          send_and_dump_early_cells(conn, layer_hint, circ);
+        }
+        else { /* SEQN_IS_NEXT(seqn, conn->next_seq_num) */
+          insert_early_cell(conn, layer_hint, circ, cell, seqn);
+        }
+      }
+      else { /* CIRCUIT_IS_ORIGIN(circ) */
         conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
       }
-      else {
-        // if it is a bossed circ, it gets the connection of the boss
-        circuit_t* boss = TO_ORIGIN_CIRCUIT(circ)->boss_circ;
-        conn = relay_lookup_conn(boss, cell, cell_direction, layer_hint);
-      }
-
-      // error if connection not found
-      if (!conn) return -1;
-
-      uint32_t seq = ntohl() // PAREI AQ
     }
-    else { /* CIRCUIT_IS_ORIGIN(circ) */
-      conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+
+    // Conflux <
+    if (circ->purpose == CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
+      pathbias_check_probe_response(circ, cell);
+
+      /* We need to drop this cell no matter what to avoid code that expects
+       * a certain purpose (such as the hidserv code). */
+      return 0;
     }
+
+    conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+    // >
 
     if (cell_direction == CELL_DIRECTION_OUT) {
       ++stats_n_relay_cells_delivered;
@@ -638,8 +760,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   memset(&cell, 0, sizeof(cell_t));
   cell.command = CELL_RELAY;
   // Franco
-  cell.sequence_num = circ->cell_sequence_num;
-  circ->cell_sequence_num = (circ->cell_sequence_num + 1) % UINT_FAST64_MAX;
+  // TODO
 
   if (CIRCUIT_IS_ORIGIN(circ)) {
     // Franco
@@ -797,6 +918,29 @@ connection_edge_send_command(edge_connection_t *fromconn,
   crypt_path_t *cpath_layer = fromconn->cpath_layer;
   tor_assert(fromconn);
   circ = fromconn->on_circuit;
+
+  // Franco
+  uint32_t seqn = 0;
+
+  if (relay_command == RELAY_COMMAND_DATA && !CIRCUIT_IS_ORIGIN(circ)) {
+    fromconn->next_seq_num++;
+    seqn = fromconn->next_seq_num;
+
+    if (!payload) {
+      payload = tor_malloc_zero(CELL_PAYLOAD_SIZE);
+    }
+
+    set_uint32(payload, htonl(seqn));
+
+    // TODO
+    // tirar a outra selecao de circuito
+
+    // circ = choose_multipath_circ(circ);
+
+    if (circ) {
+      circ->package_window--;
+    }
+  }
 
   if (fromconn->base_.marked_for_close) {
     log_warn(LD_BUG,

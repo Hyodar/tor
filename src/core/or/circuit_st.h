@@ -238,9 +238,6 @@ struct circuit_t {
    *  and we can have up to CIRCPAD_MAX_MACHINES such machines. */
   struct circpad_machine_runtime_t *padding_info[CIRCPAD_MAX_MACHINES];
 
-  // Franco
-  /** Sequence counter */
-  uint64_t cell_sequence_num;
 };
 
 #endif /* !defined(CIRCUIT_ST_H) */

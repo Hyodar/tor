@@ -584,15 +584,13 @@ typedef enum {
  *         Stream ID               [2 bytes]
  *         Partial SHA-1           [4 bytes]
  *         Length                  [2 bytes]
- *         Relay payload           [498 bytes]
+ *         Sequence Number         [4 bytes]
+ *         Relay payload           [494 bytes]
  */
 
 /** Number of bytes in a cell, minus cell header. */
-/* #define CELL_PAYLOAD_SIZE 509 */
-// Franco
-// ---------------------------------------------------------------------------
-/** Number of bytes in a cell, minus cell header and sequence number. */
-#define CELL_PAYLOAD_SIZE 505
+#define CELL_PAYLOAD_SIZE 509 
+
 // ---------------------------------------------------------------------------
 
 /** Number of bytes in a cell transmitted over the network, in the longest

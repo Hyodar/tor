@@ -8,6 +8,20 @@
 */
 
 Inicializar os atributos criados em edge_connection_t DONE
+Destruir os atributos dinamicos criados com free em edge_connection_t
+
+onde o sequence number é atribuído à cell? connection_edge_send_command VER ISSO
+
+IMPORTANTE resolver o negocio dos bytes do payload, onde colocar pra ele perceber q os 4 primeiros sao seq?
+    \-> connection_edge_package_raw_inbuf...?
+TODOS do relay.c
+
+ver o q colocar em relay send command from edge
 
 ir no PAREI AQ
 circuit_receive_relay_cell no conflux
+
+escolha dos circuitos choose_circuit_weighted
+
+early_cells_list é do tipo
+11 10 9 7

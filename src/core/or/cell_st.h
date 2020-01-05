@@ -18,11 +18,15 @@ struct cell_t {
   circid_t circ_id; /**< Circuit which received the cell. */
   uint8_t command; /**< Type of the cell: one of CELL_PADDING, CELL_CREATE,
                     * CELL_DESTROY, etc */
-  // Franco
-  // -------------------------------------------------------------------------
-  uint32_t sequence_num; /* Number of the cell in a sequence */
-  // -------------------------------------------------------------------------
   uint8_t payload[CELL_PAYLOAD_SIZE]; /**< Cell body. */
+};
+
+// Franco
+/** Struct to hold a cell and its sequence number. Used to queue
+ * packets that arrive earlier than expected. */
+struct early_cell_t {
+  struct cell_t* cell;
+  uint32_t sequence_num;
 };
 
 #endif /* !defined(CELL_ST_H) */
