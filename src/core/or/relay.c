@@ -245,12 +245,13 @@ send_and_dump_early_cells(edge_connection_t* conn, crypt_path_t* layer_hint,
       break;
     }
   }
+
+  return 0;
 }
 
 // Franco
 int
-insert_early_cell(edge_connection_t* conn, crypt_path_t* layer_hint,
-                 circuit_t* circ, cell_t* cell, uint32_t seqn) {
+insert_early_cell(edge_connection_t* conn, cell_t* cell, uint32_t seqn) {
   
   struct early_cell_t* ecell = tor_malloc_zero(sizeof(struct early_cell_t));
   ecell->cell = tor_malloc_zero(sizeof(cell_t));
@@ -263,10 +264,10 @@ insert_early_cell(edge_connection_t* conn, crypt_path_t* layer_hint,
     return 0;
   }
 
-  size_t i;
+  int i;
   for(i = conn->early_cells_list->num_used - 1; i >= 0; i--) {
     struct early_cell_t* it = conn->early_cells_list->list[i];
-    if(SEQN_BIGGER(seqn, it->sequence_num)) {
+    if(SEQN_BIGGER(it->sequence_num, seqn)) {
       smartlist_insert(conn->early_cells_list, i+1, ecell);
       return 0;
     }
@@ -277,6 +278,7 @@ insert_early_cell(edge_connection_t* conn, crypt_path_t* layer_hint,
     return 0;
   }
 
+  return -1;
 }
 
 /** Receive a relay cell:
@@ -316,8 +318,9 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
 
   circuit_update_channel_usage(circ, cell);
 
+  edge_connection_t* conn = NULL;
+
   if (recognized) {
-    edge_connection_t* conn = NULL;
 
     /* Recognized cell, the cell digest has been updated, we'll record it for
      * the SENDME if need be. */
@@ -342,7 +345,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
         }
         else {
           // if it is a bossed circ, it gets the connection of the boss
-          circuit_t* boss = TO_ORIGIN_CIRCUIT(circ)->boss_circ;
+          circuit_t* boss = TO_CIRCUIT(TO_ORIGIN_CIRCUIT(circ)->boss_circ);
           conn = relay_lookup_conn(boss, cell, cell_direction, layer_hint);
         }
 
@@ -354,23 +357,23 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
         // Kevin <
         if (( layer_hint && --layer_hint->deliver_window < 0) ||
                 (!layer_hint && --circ->deliver_window < 0)) {
-            log_info(LOG_PROTOCOL_WARN, LD_PROTOCOL,
-                      "(relay data) circ deliver_window below 0. Killing.");
+            // "(relay data) circ deliver_window below 0. Killing."
             connection_edge_end(conn, END_STREAM_REASON_TORPROTOCOL);
             connection_mark_for_close(TO_CONN(conn));
             return -END_CIRC_REASON_TORPROTOCOL;
         }
 
+        /*
         log_info(LD_OR,"circ deliver_window now %d.", layer_hint ?
                   layer_hint->deliver_window : circ->deliver_window);
+        */
 
         if (--conn->deliver_window < 0) { /* is it below 0 after decrement? */
-            log_info(LOG_PROTOCOL_WARN, LD_PROTOCOL,
+            /*log_info(LOG_PROTOCOL_WARN, LD_PROTOCOL,
                       "(relay data) conn deliver_window below 0. Killing.");
+            */
             return -END_CIRC_REASON_TORPROTOCOL;
         }
-        circuit_consider_sending_sendme(circ, layer_hint); // FIXME
-        connection_edge_consider_sending_sendme(conn); // FIXME
         // >
         
         if (SEQN_IS_NEXT(seqn, conn->next_seq_num)) {
@@ -384,51 +387,53 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
           send_and_dump_early_cells(conn, layer_hint, circ);
         }
         else { /* SEQN_IS_NEXT(seqn, conn->next_seq_num) */
-          insert_early_cell(conn, layer_hint, circ, cell, seqn);
+          insert_early_cell(conn, cell, seqn);
         }
       }
       else { /* CIRCUIT_IS_ORIGIN(circ) */
         conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
       }
     }
+    else { /* RELAY_COMMAND_RELAY && IN */
 
-    // Conflux <
-    if (circ->purpose == CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
-      pathbias_check_probe_response(circ, cell);
+      // Conflux <
+      if (circ->purpose == CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
+        pathbias_check_probe_response(circ, cell);
 
-      /* We need to drop this cell no matter what to avoid code that expects
-       * a certain purpose (such as the hidserv code). */
-      return 0;
-    }
-
-    conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
-    // >
-
-    if (cell_direction == CELL_DIRECTION_OUT) {
-      ++stats_n_relay_cells_delivered;
-      log_debug(LD_OR,"Sending away from origin.");
-      reason = connection_edge_process_relay_cell(cell, circ, conn, NULL);
-      if (reason < 0) {
-        log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
-               "connection_edge_process_relay_cell (away from origin) "
-               "failed.");
-        return reason;
+        /* We need to drop this cell no matter what to avoid code that expects
+        * a certain purpose (such as the hidserv code). */
+        return 0;
       }
-    }
-    if (cell_direction == CELL_DIRECTION_IN) {
-      ++stats_n_relay_cells_delivered;
-      log_debug(LD_OR,"Sending to origin.");
-      reason = connection_edge_process_relay_cell(cell, circ, conn,
-                                                  layer_hint);
-      if (reason < 0) {
-        /* If a client is trying to connect to unknown hidden service port,
-         * END_CIRC_AT_ORIGIN is sent back so we can then close the circuit.
-         * Do not log warn as this is an expected behavior for a service. */
-        if (reason != END_CIRC_AT_ORIGIN) {
-          log_warn(LD_OR,
-                   "connection_edge_process_relay_cell (at origin) failed.");
+
+      conn = relay_lookup_conn(circ, cell, cell_direction, layer_hint);
+      // >
+
+      if (cell_direction == CELL_DIRECTION_OUT) {
+        ++stats_n_relay_cells_delivered;
+        log_debug(LD_OR,"Sending away from origin.");
+        reason = connection_edge_process_relay_cell(cell, circ, conn, NULL);
+        if (reason < 0) {
+          log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
+                "connection_edge_process_relay_cell (away from origin) "
+                "failed.");
+          return reason;
         }
-        return reason;
+      }
+      if (cell_direction == CELL_DIRECTION_IN) {
+        ++stats_n_relay_cells_delivered;
+        log_debug(LD_OR,"Sending to origin.");
+        reason = connection_edge_process_relay_cell(cell, circ, conn,
+                                                    layer_hint);
+        if (reason < 0) {
+          /* If a client is trying to connect to unknown hidden service port,
+          * END_CIRC_AT_ORIGIN is sent back so we can then close the circuit.
+          * Do not log warn as this is an expected behavior for a service. */
+          if (reason != END_CIRC_AT_ORIGIN) {
+            log_warn(LD_OR,
+                    "connection_edge_process_relay_cell (at origin) failed.");
+          }
+          return reason;
+        }
       }
     }
     return 0;
@@ -786,17 +791,17 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
       origin_circuit_t* multipath_circuit = 
         ocirc->bossed_circs[ocirc->current_multipath];
       
-      ocirc->current_multipath = 
-        (++ocirc->current_multipath) % ocirc->n_multipaths;
+      ocirc->current_multipath++;
+      ocirc->current_multipath %= ocirc->n_multipaths;
       ocirc->multipath_or_boss = !ocirc->multipath_or_boss;
 
       if(multipath_circuit) {
         circ = TO_CIRCUIT(multipath_circuit);
       
-        log_err(LD_GENERAL, "Boss: %p | Sending traffic through bossed route.\n", ocirc);
+        log_info(LD_GENERAL, "Boss: %p | Sending traffic through bossed route.\n", ocirc);
       }
       else {
-        log_err(LD_GENERAL, "Boss: %p | Tried to send traffic through invalid bossed route.\n", ocirc);
+        log_info(LD_GENERAL, "Boss: %p | Tried to send traffic through invalid bossed route.\n", ocirc);
       }
     }
     // -------------------------------------------------------------------------
@@ -2412,11 +2417,8 @@ connection_edge_package_raw_inbuf(edge_connection_t *conn, int package_partial,
   if (!length)
     return 0;
 
-  /* If we reach this point, we will definitely be packaging bytes into
-   * a cell. */
-
-  stats_n_data_bytes_packaged += length;
-  stats_n_data_cells_packaged += 1;
+  // Franco
+  // moved $1$
 
   if (PREDICT_UNLIKELY(sending_from_optimistic)) {
     /* XXXX We could be more efficient here by sometimes packing
@@ -2428,8 +2430,27 @@ connection_edge_package_raw_inbuf(edge_connection_t *conn, int package_partial,
         entry_conn->sending_optimistic_data = NULL;
     }
   } else {
-    connection_buf_get_bytes(payload, length, TO_CONN(conn));
+
+    // Franco
+    if(TO_CONN(conn)->type == CONN_TYPE_EXIT) {
+      
+      if(length > RELAY_PAYLOAD_SIZE - SEQNUM_SIZE) {
+        length = RELAY_PAYLOAD_SIZE - SEQNUM_SIZE;
+      }
+
+      connection_buf_get_bytes(payload + SEQNUM_SIZE, length, TO_CONN(conn));
+      length += SEQNUM_SIZE;
+    } 
+    else { /* TO_CONN(conn)->type == CONN_TYPE_EXIT */
+      connection_buf_get_bytes(payload, length, TO_CONN(conn));
+    }
   }
+
+  /* If we reach this point, we will definitely be packaging bytes into
+   * a cell. */
+  // $1$
+  stats_n_data_bytes_packaged += length;
+  stats_n_data_cells_packaged += 1;
 
   log_debug(domain,TOR_SOCKET_T_FORMAT": Packaging %d bytes (%d waiting).",
             conn->base_.s,

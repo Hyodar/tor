@@ -132,6 +132,11 @@ STATIC size_t connection_edge_get_inbuf_bytes_to_package(size_t n_available,
                                                       int package_partial,
                                                       circuit_t *on_circuit);
 
+// Franco
+int send_and_dump_early_cells(edge_connection_t* conn, crypt_path_t* layer_hint, circuit_t* circ);
+
+int insert_early_cell(edge_connection_t* conn, cell_t* cell, uint32_t seqn);
+
 #endif /* defined(RELAY_PRIVATE) */
 
 #endif /* !defined(TOR_RELAY_H) */
